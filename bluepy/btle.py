@@ -390,15 +390,15 @@ class BluepyHelper:
 
 
 class Peripheral(BluepyHelper):
-    def __init__(self, deviceAddr=None, addrType=ADDR_TYPE_PUBLIC, iface=None):
+    def __init__(self, deviceAddr=None, addrType=ADDR_TYPE_PUBLIC, iface=None, connWindowInterval=0x0010, connWindow=0x0010, connIntervalMin=0x0007, connIntervalMax=0x007 ):
         BluepyHelper.__init__(self)
         self._serviceMap = None # Indexed by UUID
         (self.deviceAddr, self.addrType, self.iface) = (None, None, None)
 
         if isinstance(deviceAddr, ScanEntry):
-            self._connect(deviceAddr.addr, deviceAddr.addrType, deviceAddr.iface)
+            self._connect(deviceAddr.addr, deviceAddr.addrType, deviceAddr.iface, connWindowInterval, connWindow, connIntervalMin, connIntervalMax)
         elif deviceAddr is not None:
-            self._connect(deviceAddr, addrType, iface)
+            self._connect(deviceAddr, addrType, iface, connWindowInterval, connWindow, connIntervalMin, connIntervalMax)
 
     def setDelegate(self, delegate_): # same as withDelegate(), deprecated
         return self.withDelegate(delegate_)
@@ -428,7 +428,7 @@ class Peripheral(BluepyHelper):
                     continue
             return resp
 
-    def _connect(self, addr, addrType=ADDR_TYPE_PUBLIC, iface=None):
+    def _connect(self, addr, addrType=ADDR_TYPE_PUBLIC, iface=None, connWindowInterval=0x0010, connWindow=0x0010, connIntervalMin=0x0007, connIntervalMax=0x007 ):
         if len(addr.split(":")) != 6:
             raise ValueError("Expected MAC address, got %s" % repr(addr))
         if addrType not in (ADDR_TYPE_PUBLIC, ADDR_TYPE_RANDOM):
@@ -437,6 +437,9 @@ class Peripheral(BluepyHelper):
         self.addr = addr
         self.addrType = addrType
         self.iface = iface
+
+        #self._writeCmd("connhci %s %s %s %s %s\n" % (addr, connWindowInterval, connWindow, connIntervalMin, connIntervalMax))
+
         if iface is not None:
             self._writeCmd("conn %s %s %s\n" % (addr, addrType, "hci"+str(iface)))
         else:

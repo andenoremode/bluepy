@@ -861,6 +861,19 @@ static int strtohandle(const char *src)
     return dst;
 }
 
+static uint16_t strtou16(const char *src)
+{
+    char *e;
+    uint16_t dst;
+
+    errno = 0;
+    dst = strtoll(src, &e, 16);
+    if (errno != 0 || *e != '\0')
+        return -EINVAL;
+
+    return dst;
+}
+
 static void cmd_included(int argcp, char **argvp)
 {
     int start = 0x0001;
@@ -1738,6 +1751,76 @@ static gboolean hci_monitor_cb(GIOChannel *chan, GIOCondition cond, gpointer use
     return TRUE;
 }
 
+#include "l2cap.h"
+
+static void cmd_hci_connect(int argcp, char **argvp)
+{
+    bdaddr_t dst_addr;
+    uint16_t hci_handle;
+
+    uint16_t scan_interval = htobs(0x0010);
+    uint16_t scan_window = htobs(0x0010);
+    uint16_t min_interval = htobs(0x0006);
+    uint16_t max_interval = htobs(0x0007);
+    uint16_t slave_latency = htobs(0);
+    uint16_t supervision_timeout = htobs(0x0c80);
+    int timeout = 25000;
+
+    if (argcp > 1) {
+        g_free(opt_dst);
+        opt_dst = g_strdup(argvp[1]);
+    }
+
+    if (argcp > 2) {
+        scan_interval = strtou16(argvp[2]);
+    }
+    if (argcp > 3) {
+        scan_window = strtou16(argvp[3]);
+    }
+    if (argcp > 4) {
+        min_interval = strtou16(argvp[4]);
+    }
+    if (argcp > 5) {
+        max_interval = strtou16(argvp[5]);
+    }
+    if (argcp > 6) {
+        slave_latency = strtou16(argvp[6]);
+    }
+    if (argcp > 7) {
+        supervision_timeout = strtou16(argvp[7]);
+    }
+    if (argcp > 8) {
+        timeout = strtohandle(argvp[8]);
+    }
+
+
+    int hci_socket = hci_open_dev(mgmt_ind);
+    str2ba(opt_dst, &dst_addr);
+
+    hci_io = g_io_channel_unix_new(hci_socket);
+    g_io_channel_set_encoding(hci_io, NULL, NULL);
+    g_io_channel_set_close_on_unref(hci_io, TRUE);
+    g_io_add_watch(hci_io, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, hci_monitor_cb, NULL);
+    g_io_channel_unref(hci_io);
+
+    DBG("Creating connection... %s", opt_dst);
+    int result = hci_le_create_conn(hci_socket,
+        scan_interval, scan_window, 0,
+        LE_RANDOM_ADDRESS, dst_addr, LE_PUBLIC_ADDRESS,
+        min_interval,
+        max_interval,
+        slave_latency,
+        supervision_timeout,
+        htobs(0x0000), htobs(0x0000),
+        &hci_handle, timeout);
+    DBG("%d\n", result);
+    if (result < 0) {
+        perror("Could not create connection");
+        exit(1);
+    }
+}
+
+
 
 // perform a passive scan, i.e. report ADV_IND packets but do not request SCN_RSP packets
 static void discover(bool start)
@@ -1852,6 +1935,8 @@ static struct {
         "Show current status" },
     { "quit",       cmd_exit,   "",
         "Exit interactive mode" },
+    { "connhci",    cmd_hci_connect,"[address scanint scanwindow conninterval connsupervision]",
+        "Connect to a remote device via HCI" },    
     { "conn",       cmd_connect,    "[address [address type [interface]]]",
         "Connect to a remote device" },
     { "disc",       cmd_disconnect, "",
