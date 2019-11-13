@@ -438,7 +438,14 @@ class Peripheral(BluepyHelper):
         self.addrType = addrType
         self.iface = iface
 
-        #self._writeCmd("connhci %s %s %s %s %s\n" % (addr, connWindowInterval, connWindow, connIntervalMin, connIntervalMax))
+        self._writeCmd("connhci %s\n" % (addr))
+        rsp = self._getResp('stat')
+        while rsp['state'][0] == 'tryconnhci':
+            rsp = self._getResp('stat')
+        
+        if rsp['state'][0] != 'connhci':
+            self._stopHelper()
+            raise BTLEDisconnectError("Failed to connect to peripheral %s, addr type: %s using HCI" % (addr, addrType), rsp)
 
         if iface is not None:
             self._writeCmd("conn %s %s %s\n" % (addr, addrType, "hci"+str(iface)))

@@ -46,6 +46,9 @@
 #include "gatttool.h"
 #include "version.h"
 
+#include "hci.h"
+#include "hci_lib.h"
+
 #define IO_CAPABILITY_NOINPUTNOOUTPUT   0x03
 
 #ifdef BLUEPY_DEBUG
@@ -71,6 +74,8 @@ static void try_open(void) {
 static GIOChannel *iochannel = NULL;
 static GAttrib *attrib = NULL;
 static GMainLoop *event_loop;
+
+uint16_t hci_handle = 0xFFFF;
 
 static gchar *opt_src = NULL;
 static gchar *opt_dst = NULL;
@@ -101,6 +106,8 @@ static enum state {
     STATE_CONNECTING=1,
     STATE_CONNECTED=2,
     STATE_SCANNING=3,
+    STATE_CONNECTING_HCI=4,
+    STATE_CONNECTED_HCI=5,
 } conn_state;
 
 
@@ -154,10 +161,12 @@ static const char
   *err_SUCCESS   = "success";
 
 static const char
-  *st_DISCONNECTED = "disc",
-  *st_CONNECTING   = "tryconn",
-  *st_CONNECTED    = "conn",
-  *st_SCANNING    = "scan";
+  *st_DISCONNECTED    = "disc",
+  *st_CONNECTING      = "tryconn",
+  *st_CONNECTED       = "conn",
+  *st_SCANNING        = "scan",
+  *st_CONNECTING_HCI  = "tryconnhci",
+  *st_CONNECTED_HCI   = "connhci";
 
 // delimits fields in response message
 #define RESP_DELIM "\x1e"
@@ -264,6 +273,16 @@ static void cmd_status(int argcp, char **argvp)
 
     case STATE_SCANNING:
       send_sym(tag_CONNSTATE, st_SCANNING);
+      send_str(tag_DEVICE, opt_dst);
+      break;
+
+    case STATE_CONNECTING_HCI:
+      send_sym(tag_CONNSTATE, st_CONNECTING_HCI);
+      send_str(tag_DEVICE, opt_dst);
+      break;
+
+    case STATE_CONNECTED_HCI:
+      send_sym(tag_CONNSTATE, st_CONNECTED_HCI);
       send_str(tag_DEVICE, opt_dst);
       break;
 
@@ -781,8 +800,10 @@ static gboolean channel_watcher(GIOChannel *chan, GIOCondition cond,
 static void cmd_connect(int argcp, char **argvp)
 {
     GError *gerr = NULL;
-    if (conn_state != STATE_DISCONNECTED)
+    if (conn_state != STATE_CONNECTED_HCI) {
+        DBG("Invalid state");
         return;
+    }
 
     if (argcp > 1) {
         g_free(opt_dst);
@@ -823,6 +844,15 @@ static void cmd_connect(int argcp, char **argvp)
 static void cmd_disconnect(int argcp, char **argvp)
 {
     DBG("");
+
+    if (hci_handle != 0xFFFF) {
+        DBG("disconnecting hci handle 0x%04x", hci_handle);
+        int hci_socket = hci_open_dev(mgmt_ind);
+        if (hci_disconnect(hci_socket, hci_handle, 0x08, 2000) < 0) {
+            DBG("hci_disconnect error: %s", strerror(errno));
+            resp_error(err_MGMT_ERR);
+        }
+    }
     disconnect_io();
 }
 
@@ -1624,9 +1654,6 @@ static void cmd_scan(int argcp, char **argvp)
     }
 }
 
-#include "hci.h"
-#include "hci_lib.h"
-
 static gboolean hci_monitor_cb(GIOChannel *chan, GIOCondition cond, gpointer user_data)
 {
     unsigned char buf[HCI_MAX_FRAME_SIZE], *ptr;
@@ -1753,10 +1780,9 @@ static gboolean hci_monitor_cb(GIOChannel *chan, GIOCondition cond, gpointer use
 
 #include "l2cap.h"
 
-static void cmd_hci_connect(int argcp, char **argvp)
+static void cmd_connect_hci(int argcp, char **argvp)
 {
     bdaddr_t dst_addr;
-    uint16_t hci_handle;
 
     uint16_t scan_interval = htobs(0x0010);
     uint16_t scan_window = htobs(0x0010);
@@ -1764,7 +1790,7 @@ static void cmd_hci_connect(int argcp, char **argvp)
     uint16_t max_interval = htobs(0x0007);
     uint16_t slave_latency = htobs(0);
     uint16_t supervision_timeout = htobs(0x0c80);
-    int timeout = 25000;
+    int timeout = 10000;
 
     if (argcp > 1) {
         g_free(opt_dst);
@@ -1803,6 +1829,7 @@ static void cmd_hci_connect(int argcp, char **argvp)
     g_io_add_watch(hci_io, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, hci_monitor_cb, NULL);
     g_io_channel_unref(hci_io);
 
+    set_state(STATE_CONNECTING_HCI);
     DBG("Creating connection... %s", opt_dst);
     int result = hci_le_create_conn(hci_socket,
         scan_interval, scan_window, 0,
@@ -1815,8 +1842,8 @@ static void cmd_hci_connect(int argcp, char **argvp)
         &hci_handle, timeout);
     DBG("%d\n", result);
     if (result < 0) {
-        perror("Could not create connection");
-        exit(1);
+        DBG("error hci_le_create_conn %s", strerror(errno));
+        resp_error(err_BAD_PARAM);
     }
 }
 
@@ -1935,7 +1962,7 @@ static struct {
         "Show current status" },
     { "quit",       cmd_exit,   "",
         "Exit interactive mode" },
-    { "connhci",    cmd_hci_connect,"[address scanint scanwindow conninterval connsupervision]",
+    { "connhci",    cmd_connect_hci,"[address scanint scanwindow conninterval connsupervision]",
         "Connect to a remote device via HCI" },    
     { "conn",       cmd_connect,    "[address [address type [interface]]]",
         "Connect to a remote device" },
@@ -2074,6 +2101,7 @@ static void mgmt_device_connected(uint16_t index, uint16_t length,
         const void *param, void *user_data)
 {
     DBG("New device connected");
+    set_state(STATE_CONNECTED_HCI);
 }
 
 static void mgmt_scanning(uint16_t index, uint16_t length,
