@@ -1789,7 +1789,7 @@ static void cmd_connect_hci(int argcp, char **argvp)
     uint16_t min_interval = htobs(0x0006);
     uint16_t max_interval = htobs(0x0007);
     uint16_t slave_latency = htobs(0);
-    uint16_t supervision_timeout = htobs(0x0c80);
+    uint16_t supervision_timeout = htobs(0x03e8);
     int timeout = 10000;
 
     if (argcp > 1) {

@@ -428,7 +428,7 @@ class Peripheral(BluepyHelper):
                     continue
             return resp
 
-    def _connect(self, addr, addrType=ADDR_TYPE_PUBLIC, iface=None, connWindowInterval=0x0010, connWindow=0x0010, connIntervalMin=0x0007, connIntervalMax=0x007 ):
+    def _connect(self, addr, addrType=ADDR_TYPE_PUBLIC, iface=None, connWindowInterval=0x0010, connWindow=0x0010, connIntervalMin=0x0007, connIntervalMax=0x007, slaveLatency=0x0, supervisionTimeout=0x3e8 ):
         if len(addr.split(":")) != 6:
             raise ValueError("Expected MAC address, got %s" % repr(addr))
         if addrType not in (ADDR_TYPE_PUBLIC, ADDR_TYPE_RANDOM):
@@ -438,7 +438,7 @@ class Peripheral(BluepyHelper):
         self.addrType = addrType
         self.iface = iface
 
-        self._writeCmd("connhci %s\n" % (addr))
+        self._writeCmd("connhci %s %s %s %s %s %s %s\n" % (addr, str(connWindowInterval), str(connWindow), str(connIntervalMin), str(connIntervalMax), str(slaveLatency), str(supervisionTimeout)))
         rsp = self._getResp('stat')
         while rsp['state'][0] == 'tryconnhci':
             rsp = self._getResp('stat')
