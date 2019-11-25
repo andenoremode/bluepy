@@ -1818,16 +1818,16 @@ static void cmd_connect_hci(int argcp, char **argvp)
     if (argcp > 8) {
         timeout = strtohandle(argvp[8]);
     }
+    DBG("Conn params: scan: 0x%04x 0x%04x, conn: 0x%04x 0x%04x, slave latency = %d, supervision timeout = %d, timeout = %d", 
++                   scan_interval, scan_window, min_interval, max_interval, slave_latency, supervision_timeout, timeout);
 
 
     int hci_socket = hci_open_dev(mgmt_ind);
+    if (hci_socket < 0) {
+        DBG("error opening device, hci_le_create_conn %s", strerror(errno));
+        resp_error(err_BAD_PARAM);
+    }
     str2ba(opt_dst, &dst_addr);
-
-    hci_io = g_io_channel_unix_new(hci_socket);
-    g_io_channel_set_encoding(hci_io, NULL, NULL);
-    g_io_channel_set_close_on_unref(hci_io, TRUE);
-    g_io_add_watch(hci_io, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, hci_monitor_cb, NULL);
-    g_io_channel_unref(hci_io);
 
     set_state(STATE_CONNECTING_HCI);
     DBG("Creating connection... %s", opt_dst);
@@ -1838,7 +1838,7 @@ static void cmd_connect_hci(int argcp, char **argvp)
         max_interval,
         slave_latency,
         supervision_timeout,
-        htobs(0x0000), htobs(0x0000),
+        htobs(0x0001), htobs(0x0001),
         &hci_handle, timeout);
     DBG("%d\n", result);
     if (result < 0) {

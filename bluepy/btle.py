@@ -438,7 +438,7 @@ class Peripheral(BluepyHelper):
         self.addrType = addrType
         self.iface = iface
 
-        self._writeCmd("connhci %s %s %s %s %s %s %s\n" % (addr, str(connWindowInterval), str(connWindow), str(connIntervalMin), str(connIntervalMax), str(slaveLatency), str(supervisionTimeout)))
+        self._writeCmd("connhci %s %X %X %X %X %X %X\n" % (addr, connWindowInterval, connWindow, connIntervalMin, connIntervalMax, slaveLatency, supervisionTimeout))
         rsp = self._getResp('stat')
         while rsp['state'][0] == 'tryconnhci':
             rsp = self._getResp('stat')
