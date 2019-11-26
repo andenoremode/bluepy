@@ -298,6 +298,7 @@ static void cmd_status(int argcp, char **argvp)
 
 static void set_state(enum state st)
 {
+    DBG("set_state = %d", st);
     conn_state = st;
     cmd_status(0, NULL);
 }
@@ -603,6 +604,15 @@ static void disconnect_io()
     g_io_channel_unref(iochannel);
     iochannel = NULL;
 
+    if (hci_handle != 0xFFFF) {
+        DBG("disconnecting hci handle 0x%04x", hci_handle);
+        int hci_socket = hci_open_dev(mgmt_ind);
+        if (hci_disconnect(hci_socket, hci_handle, 0x16, 25000) < 0) {
+            DBG("hci_disconnect error: %s", strerror(errno));
+            resp_error(err_MGMT_ERR);
+        }
+    }
+
     set_state(STATE_DISCONNECTED);
 }
 
@@ -845,19 +855,7 @@ static void cmd_disconnect(int argcp, char **argvp)
 {
     DBG("");
 
-    if (conn_state == STATE_DISCONNECTED)
-        return;
-
     disconnect_io();
-
-    if (hci_handle != 0xFFFF) {
-        DBG("disconnecting hci handle 0x%04x", hci_handle);
-        int hci_socket = hci_open_dev(mgmt_ind);
-        if (hci_disconnect(hci_socket, hci_handle, 0x16, 25000) < 0) {
-            DBG("hci_disconnect error: %s", strerror(errno));
-            resp_error(err_MGMT_ERR);
-        }
-    }
 }
 
 static void cmd_primary(int argcp, char **argvp)
