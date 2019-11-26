@@ -60,7 +60,7 @@ static FILE * fp = NULL;
 
 static void try_open(void) {
     if (!fp) {
-        fp = fopen ("bluepy-helper.log", "w");
+        fp = fopen ("bluepy-helper.log", "a");
     }
 }
 #define DBG(fmt, ...) do {try_open();if (fp) {fprintf(fp, "%s() :" fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(fp);} \
@@ -845,15 +845,19 @@ static void cmd_disconnect(int argcp, char **argvp)
 {
     DBG("");
 
+    if (conn_state == STATE_DISCONNECTED)
+        return;
+
+    disconnect_io();
+
     if (hci_handle != 0xFFFF) {
         DBG("disconnecting hci handle 0x%04x", hci_handle);
         int hci_socket = hci_open_dev(mgmt_ind);
-        if (hci_disconnect(hci_socket, hci_handle, 0x08, 2000) < 0) {
+        if (hci_disconnect(hci_socket, hci_handle, 0x16, 25000) < 0) {
             DBG("hci_disconnect error: %s", strerror(errno));
             resp_error(err_MGMT_ERR);
         }
     }
-    disconnect_io();
 }
 
 static void cmd_primary(int argcp, char **argvp)
