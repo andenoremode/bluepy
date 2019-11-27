@@ -609,7 +609,7 @@ static void disconnect_io()
         int hci_socket = hci_open_dev(mgmt_ind);
         if (hci_disconnect(hci_socket, hci_handle, 0x16, 25000) < 0) {
             DBG("hci_disconnect error: %s", strerror(errno));
-            resp_error(err_MGMT_ERR);
+            //resp_error(err_MGMT_ERR);
         }
     }
 
